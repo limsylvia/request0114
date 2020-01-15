@@ -1,0 +1,524 @@
+-- Media Campass Request 20200108
+
+--Created By: dick.yang
+--Created at: 2020-01-09
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+-------------------------------------------------------------CREATE account - city table-----------------------------------------------
+DROP TABLE IF EXISTS da_dev.MC_AccountCity_Request20200108;
+CREATE TABLE da_dev.MC_AccountCity_Request20200108
+(
+    account_id int,
+    city string,
+    source string
+);
+
+-- get account - city from CRM dim account
+DROP TABLE IF EXISTS da_dev.MC_AccountCity_fromCRM;
+CREATE TABLE da_dev.MC_AccountCity_fromCRM
+(
+    account_id int,
+    city string
+);
+
+INSERT INTO da_dev.MC_AccountCity_fromCRM(account_id,city)
+SELECT a.account_id,b.city
+FROM crm.dim_account a
+JOIN crm.dim_store b
+ON a.prefer_store_code = b.store_code;
+
+
+--get city we need from CRM dim account
+INSERT INTO da_dev.MC_AccountCity_Request20200108(account_id,city,source)
+SELECT account_id,    
+CASE  WHEN city = 'Shanghai' THEN '上海'
+        WHEN city = 'Beijing' THEN '北京'
+        WHEN city = 'Nanjing' THEN '南京'
+        WHEN city = 'Hangzhou' THEN '广州'
+        WHEN city = 'Chengdu' THEN '成都'
+        WHEN city = 'Hangzhou' THEN '杭州'
+        WHEN city = 'Wuhan' THEN '武汉'
+        WHEN city = 'Shenzhen' THEN '深圳'
+        WHEN city = 'Xian' THEN '西安'
+        WHEN city = 'Chongqing' THEN '重庆'
+        END as city,
+        'CRM_dim_account' as source
+FROM da_dev.MC_AccountCity_fromCRM
+WHERE city IN ('Beijing','Chongqing','Guangzhou','Shanghai','Shenzhen','Wuhan','Xian','Chengdu','Hangzhou','Nanjing');
+
+
+--get city we need from user_seg_static
+
+INSERT INTO da_dev.MC_AccountCity_Request20200108(account_id,city,source)
+SELECT a.account_id,a.combine_city,'user_seg_static'
+FROM
+(
+    SELECT a.union_id,a.combine_city,b.sephora_id,c.card_number,c.account_id
+    FROM
+    (
+        SELECT union_id,combine_city
+        FROM da_dev.rina_user_seg_static_info
+        WHERE combine_city is not null
+    ) a
+    JOIN 
+    (
+        SELECT distinct union_id,Sephora_id
+        FROM da_dev.iris_app_user_id_mapping
+        WHERE Sephora_id is not null
+    ) b
+    ON a.union_id = b.union_id
+    JOIN 
+    (
+        SELECT distinct sephora_id,card_number,account_id
+        FROM da_dev.iris_user_id_mapping
+        WHERE sephora_id is not null
+    ) c
+    ON b.sephora_id = c.sephora_id
+) a
+LEFT OUTER JOIN da_dev.MC_AccountCity_fromCRM b
+ON a.account_id = b.account_id
+WHERE b.account_id is null
+AND a.combine_city in ('北京','上海','深圳','广州','成都','重庆','西安','武汉','杭州','南京');
+
+
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+-------------------------------------------------------------CREATE account - Registered data table-----------------------------------------------
+
+DROP TABLE IF EXISTS da_dev.MC_AccountRegistered_Request20200108;
+CREATE TABLE da_dev.MC_AccountRegistered_Request20200108
+(
+    account_id int,
+    registered_date string,
+	do_latest_utm_content string
+);
+
+--ps201906 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201906'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between  '2019-05-29' and '2019-06-05'; 
+--ps201909 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201909'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between '2019-09-01' and '2019-09-08';
+--ps201911 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201911'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between '2019-10-28' and '2019-11-03';
+       
+--------------------------------------------------------------------------------------------------------------------
+ 
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+-------------------------------------------------------------CREATE account - wechatcampaign_match_crm_20200108 table-----------------------------------------------
+DROP TABLE IF exists `da_dev.wechatcampaign_match_crm_20200108_temp`;
+
+CREATE TABLE `da_dev.wechatcampaign_match_crm_20200108_temp`
+(
+`event` string,
+`user_id` string,
+`distinct_id` string,
+`do_latest_utm_campaign` string,
+`do_latest_utm_source` string,
+`do_latest_utm_medium` string,
+`do_latest_utm_content` string,
+`if_success` string ,
+`date` string
+);
+
+
+INSERT INTO TABLE `da_dev.wechatcampaign_match_crm_20200108_temp`
+-----raw data
+SELECT event,
+user_id,
+distinct_id,
+do_latest_utm_campaign,
+do_latest_utm_source,
+do_latest_utm_medium,
+do_latest_utm_content,
+if_success,
+`date`
+FROM dwd.v_events t1
+WHERE do_latest_utm_campaign='momentads'
+and do_latest_utm_source='wechat'
+and 
+(
+	(
+		do_latest_utm_content ='ps201906'
+		and do_latest_utm_term ='20190529'
+		and do_latest_utm_medium ='social'
+		and `dt` between '2019-05-29'  and  '2019-06-05'
+	)
+	or 
+	(
+		do_latest_utm_content ='ps201909'
+		and do_latest_utm_medium ='social'
+		and `dt` between '2019-09-01'  and  '2019-09-08'
+	)
+	or 
+	(
+		do_latest_utm_content ='ps201911'
+		and do_latest_utm_medium ='social'
+		and `dt` between '2019-10-28'  and  '2019-11-03'
+	)																
+)
+
+
+
+DROP TABLE IF exists `da_dev.wechatcampaign_match_crm_20200108`;
+
+CREATE TABLE `da_dev.wechatcampaign_match_crm_20200108`
+(
+
+`account_id` int,
+`card_no` string,
+`do_latest_utm_campaign` string,
+`do_latest_utm_source` string,
+`do_latest_utm_medium` string,
+`do_latest_utm_content` string,
+`if_success` string ,
+`date` string
+);
+
+INSERT INTO TABLE `da_dev.wechatcampaign_match_crm_20200108`
+-----raw data
+SELECT 
+account_id,
+card_number as card_no,
+do_latest_utm_campaign,
+do_latest_utm_source,
+do_latest_utm_medium,
+do_latest_utm_content,
+if_success,
+`date`
+from `da_dev.wechatcampaign_match_crm_20200108_temp` aa
+left JOIN da_dev.iris_user_id_mapping bb
+on aa.user_id = bb.sensor_id
+WHERE bb.account_id is not null
+
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+-------------------------------------------------------------CREATE - crm order-----------------------------------------------
+DROP TABLE IF EXISTS da_dev.MC_CRM_Order_Request20200108;
+CREATE TABLE da_dev.MC_CRM_Order_Request20200108
+(
+    trans_id bigint,
+    account_id bigint,
+    total_qtys bigint,
+    total_sales string,
+    trans_time string,
+    store_id int,store_name string,store_eb int,
+    o2o_store_id int,o2o_store_name string,o2o_store_eb int,
+    sub_store_id int,sub_store_name string,sub_store_eb int,
+    campaign string,
+    if_ad_period string,
+    card_type string
+);
+--ps201906
+INSERT INTO da_dev.MC_CRM_Order_Request20200108(trans_id,account_id,total_qtys,total_sales,trans_time,
+store_id,store_name,store_eb,
+o2o_store_id,o2o_store_name,o2o_store_eb,
+sub_store_id,sub_store_name,sub_store_eb,
+campaign,if_ad_period,card_type)
+SELECT aa.trans_id,aa.account_id,aa.total_qtys,aa.total_sales,aa.trans_time,
+aa.store_id,store.store_name as store_name,store.is_eb_store as store_eb,
+aa.o2o_store_id,o2o_store.store_name as o2o_store_name,o2o_store.is_eb_store as o2o_store_eb,
+aa.sub_store_id,sub_store.store_name as sub_store_name,sub_store.is_eb_store as sub_store_eb,
+'ps201906',
+CASE WHEN to_date(aa.trans_time)  between  '2019-05-29' and '2019-06-02' THEN 1 ELSE 0 END,
+card.CardType
+FROM
+(
+	SELECT aa.trans_id,aa.account_id,aa.total_qtys,aa.total_sales,aa.trans_time,aa.store_id,aa.o2o_store_id,aa.sub_store_id
+	FROM crm.dim_trans aa
+	JOIN da_dev.MC_AccountCity_Request20200108 bb
+	ON aa.account_id = bb.account_id
+	WHERE bb.account_id is not null 
+	AND to_date(aa.trans_time)  between  '2019-05-29' and '2019-06-05'
+) aa
+LEFT OUTER JOIN crm.dim_store store
+ON aa.store_id = store.store_id
+LEFT OUTER JOIN crm.dim_store o2o_store
+ON aa.o2o_store_id = o2o_store.store_id
+LEFT OUTER JOIN crm.dim_store sub_store
+ON aa.sub_store_id = sub_store.store_id
+LEFT OUTER JOIN da_dev.MC_AccountCardType_Request20200108 card
+ON aa.account_id = card.account_id
+
+
+
+--ps201909
+INSERT INTO da_dev.MC_CRM_Order_Request20200108(trans_id,account_id,total_qtys,total_sales,trans_time,
+store_id,store_name,store_eb,
+o2o_store_id,o2o_store_name,o2o_store_eb,
+sub_store_id,sub_store_name,sub_store_eb,
+campaign,if_ad_period,card_type)
+SELECT aa.trans_id,aa.account_id,aa.total_qtys,aa.total_sales,aa.trans_time,
+aa.store_id,store.store_name as store_name,store.is_eb_store as store_eb,
+aa.o2o_store_id,o2o_store.store_name as o2o_store_name,o2o_store.is_eb_store as o2o_store_eb,
+aa.sub_store_id,sub_store.store_name as sub_store_name,sub_store.is_eb_store as sub_store_eb,
+'ps201909',
+CASE WHEN to_date(aa.trans_time)  between '2019-09-04' and '2019-09-08' THEN 1 ELSE 0 END,
+card.CardType
+FROM
+(
+	SELECT aa.trans_id,aa.account_id,aa.total_qtys,aa.total_sales,aa.trans_time,aa.store_id,aa.o2o_store_id,aa.sub_store_id
+	FROM crm.dim_trans aa
+	JOIN da_dev.MC_AccountCity_Request20200108 bb
+	ON aa.account_id = bb.account_id
+	WHERE bb.account_id is not null 
+	AND to_date(aa.trans_time)  between '2019-09-01' and '2019-09-08'
+) aa
+LEFT OUTER JOIN crm.dim_store store
+ON aa.store_id = store.store_id
+LEFT OUTER JOIN crm.dim_store o2o_store
+ON aa.o2o_store_id = o2o_store.store_id
+LEFT OUTER JOIN crm.dim_store sub_store
+ON aa.sub_store_id = sub_store.store_id
+LEFT OUTER JOIN da_dev.MC_AccountCardType_Request20200108 card
+ON aa.account_id = card.account_id;
+
+
+--ps201911
+INSERT INTO da_dev.MC_CRM_Order_Request20200108(trans_id,account_id,total_qtys,total_sales,trans_time,
+store_id,store_name,store_eb,
+o2o_store_id,o2o_store_name,o2o_store_eb,
+sub_store_id,sub_store_name,sub_store_eb,
+campaign,if_ad_period,card_type)
+SELECT aa.trans_id,aa.account_id,aa.total_qtys,aa.total_sales,aa.trans_time,
+aa.store_id,store.store_name as store_name,store.is_eb_store as store_eb,
+aa.o2o_store_id,o2o_store.store_name as o2o_store_name,o2o_store.is_eb_store as o2o_store_eb,
+aa.sub_store_id,sub_store.store_name as sub_store_name,sub_store.is_eb_store as sub_store_eb,
+'ps201911',
+CASE WHEN to_date(aa.trans_time)  between '2019-10-30' and '2019-11-03' THEN 1 ELSE 0 END,
+card.CardType
+FROM
+(
+	SELECT aa.trans_id,aa.account_id,aa.total_qtys,aa.total_sales,aa.trans_time,aa.store_id,aa.o2o_store_id,aa.sub_store_id
+	FROM crm.dim_trans aa
+	JOIN da_dev.MC_AccountCity_Request20200108 bb
+	ON aa.account_id = bb.account_id
+	WHERE bb.account_id is not null 
+	AND to_date(aa.trans_time)  between '2019-10-28' and '2019-11-03'
+) aa
+LEFT OUTER JOIN crm.dim_store store
+ON aa.store_id = store.store_id
+LEFT OUTER JOIN crm.dim_store o2o_store
+ON aa.o2o_store_id = o2o_store.store_id
+LEFT OUTER JOIN crm.dim_store sub_store
+ON aa.sub_store_id = sub_store.store_id
+LEFT OUTER JOIN da_dev.MC_AccountCardType_Request20200108 card
+ON aa.account_id = card.account_id;
+
+ 
+ 
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+-------------------------------------------------------------CREATE - crm product-----------------------------------------------
+--needs further coding
+SELECT aa.product_id,
+bb.trans_id,bb.account_id,
+bb.store_eb,bb.o2o_store_eb,bb.sub_store_eb,
+bb.campaign,bb.if_ad_period,bb.card_type,
+tag.unit_price,tag.price_tag
+FROM crm.fact_trans aa
+LEFT OUTER JOIN da_dev.MC_CRM_Order_Request20200108 bb
+ON aa.trans_id = bb.trans_id
+LEFT OUTER JOIN crm.dim_product product
+ON aa.product_id = product.product_id
+LEFT OUTER JOIN da_dev.rina_sku_unit_price_tag tag
+ON product.sku_code = tag.sku_code
+WHERE bb.trans_id is not null;
+
+
+ 
+
+ 
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+
+---------------------------------------Eecel Result-----------------------------------------------
+-- table 1
+SELECT do_latest_utm_content,city,count(distinct a.account_id) as cnt
+FROM  da_dev.wechatcampaign_match_crm_20200108 a
+JOIN da_dev.MC_AccountCity_Request20200108 b
+ON a.account_id = b.account_id
+GROUP BY do_latest_utm_content,city
+order by do_latest_utm_content,city;
+
+
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table2 Order rate
+SELECT aa.campaign,aa.card_type,order_account_cnt,base_account_cnt,order_account_cnt/base_account_cnt*100
+FROM
+(
+    SELECT campaign,card_type,count(distinct account_id) as order_account_cnt
+    FROM da_dev.MC_CRM_Order_Request20200108
+    GROUP BY campaign,card_type
+) aa
+JOIN
+(
+    SELECT cardtype,count(distinct account_id) as base_account_cnt
+    FROM da_dev.MC_AccountCardType_Request20200108
+    GROUP BY cardtype
+) bb
+ON aa.card_type = bb.cardtype;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table2 Avg Basket Size
+SELECT campaign,case when card_type in ('0-Pink','1-White') then '0-Pink/White' else card_type end as card_type,avg(total_qtys) as avg_basket_size
+FROM da_dev.MC_CRM_Order_Request20200108
+GROUP BY campaign,case when card_type in ('0-Pink','1-White') then '0-Pink/White' else card_type end;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table2 %Online %Offine orders
+SELECT campaign,card_type,store_eb,count(distinct trans_id) as OrderCnt
+FROM da_dev.MC_CRM_Order_Request20200108
+GROUP BY campaign,card_type,store_eb
+ORDER BY campaign,card_type,store_eb;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table2 Price Level
+--some sku in rina_sku_unit_price_tag doesn't have price_tag and needs further process.
+
+--------------------------------------------------------------------------------------------------------------------
+--Table3
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table3 Newly Registered (Based on AD Period)
+--0529-0602
+SELECT count(distinct aa.account_id)
+FROM da_dev.MC_AccountRegistered_Request20200108 aa
+JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+ON aa.account_id = bb.account_id
+WHERE aa.registered_date between '2019-05-29' and '2019-06-02'
+AND bb.do_latest_utm_content = 'ps201906';
+--0904-0908
+SELECT count(distinct aa.account_id)
+FROM da_dev.MC_AccountRegistered_Request20200108 aa
+JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+ON aa.account_id = bb.account_id
+WHERE aa.registered_date between '2019-09-04' and '2019-09-08'
+AND bb.do_latest_utm_content = 'ps201909';
+--1030-1103
+SELECT count(distinct aa.account_id)
+FROM da_dev.MC_AccountRegistered_Request20200108 aa
+JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+ON aa.account_id = bb.account_id
+WHERE aa.registered_date between '2019-10-30' and '2019-11-03'
+AND bb.do_latest_utm_content = 'ps201911';
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table3 Newly Registered Avg Order Value (Campaign period)
+SELECT aa.campaign,avg(aa.ordercnt)
+FROM
+(
+    SELECT aa.campaign,aa.account_id,count(distinct aa.trans_id) as ordercnt
+    FROM da_dev.MC_CRM_Order_Request20200108 aa
+    LEFT OUTER JOIN 
+    (
+        SELECT aa.account_id,aa.do_latest_utm_content
+        FROM da_dev.MC_AccountRegistered_Request20200108 aa
+        JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+        ON aa.account_id = bb.account_id
+        AND aa.do_latest_utm_content = bb.do_latest_utm_content
+    ) bb
+    ON aa.account_id = bb.account_id
+    AND aa.campaign = bb.do_latest_utm_content
+    WHERE bb.account_id is not null
+    GROUP BY aa.campaign,aa.account_id
+) aa
+GROUP BY aa.campaign;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table3 %Online %Offine orders
+SELECT aa.campaign,aa.store_eb,count(distinct aa.trans_id) as ordercnt
+FROM da_dev.MC_CRM_Order_Request20200108 aa
+LEFT OUTER JOIN 
+(
+    SELECT aa.account_id,aa.do_latest_utm_content
+    FROM da_dev.MC_AccountRegistered_Request20200108 aa
+    JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+    ON aa.account_id = bb.account_id
+    AND aa.do_latest_utm_content = bb.do_latest_utm_content
+) bb
+ON aa.account_id = bb.account_id
+AND aa.campaign = bb.do_latest_utm_content
+WHERE bb.account_id is not null
+GROUP BY aa.campaign,aa.store_eb;
+--------------------------------------------------------------------------------------------------------------------
+--Table4
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table4 Order rate
+SELECT aa.campaign,aa.card_type,order_account_cnt,base_account_cnt,order_account_cnt/base_account_cnt*100
+FROM
+(
+    SELECT aa.campaign,aa.card_type,count(distinct aa.account_id) as order_account_cnt
+    FROM da_dev.MC_CRM_Order_Request20200108 aa
+    JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+    ON aa.campaign = bb.do_latest_utm_content
+    AND aa.account_id = bb.account_id
+    GROUP BY aa.campaign,aa.card_type
+) aa
+JOIN
+(
+    SELECT bb.cardtype,aa.do_latest_utm_content,count(distinct aa.account_id) as base_account_cnt
+    FROM da_dev.wechatcampaign_match_crm_20200108 aa
+    JOIN da_dev.MC_AccountCardType_Request20200108 bb
+    ON aa.account_id = bb.account_id
+    GROUP BY bb.cardtype,aa.do_latest_utm_content
+) bb
+ON aa.card_type = bb.cardtype
+AND aa.campaign = bb.do_latest_utm_content;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table4 Avg Basket Size
+SELECT campaign,case when card_type in ('0-Pink','1-White') then '0-Pink/White' else card_type end as card_type,avg(total_qtys) as avg_basket_size
+FROM da_dev.MC_CRM_Order_Request20200108 aa
+JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+ON aa.campaign = bb.do_latest_utm_content
+AND aa.account_id = bb.account_id
+GROUP BY campaign,case when card_type in ('0-Pink','1-White') then '0-Pink/White' else card_type end;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table4 %Online %Offine orders
+SELECT campaign,card_type,store_eb,count(distinct trans_id) as OrderCnt
+FROM da_dev.MC_CRM_Order_Request20200108 aa
+JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+ON aa.campaign = bb.do_latest_utm_content
+AND aa.account_id = bb.account_id
+GROUP BY campaign,card_type,store_eb
+ORDER BY campaign,card_type,store_eb;
+--------------------------------------------------------------------------------------------------------------------
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+--table4 Price Level
+--some sku in rina_sku_unit_price_tag doesn't have price_tag and needs further process.
