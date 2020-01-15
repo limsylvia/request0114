@@ -1,0 +1,19 @@
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+--table3 Newly Registered Avg Order Value (Campaign period)
+SELECT fj.campaign, avg(fj.orderv)
+FROM
+(
+    SELECT ddm.campaign,ddm.account_id,cast(distinct ddm.total_sales as bigint) as orderv
+    FROM da_dev.MC_CRM_Order_Request20200108 ddm
+    join (SELECT aa.account_id,aa.do_latest_utm_content
+        FROM da_dev.MC_AccountRegistered_Request20200108 aa
+        JOIN da_dev.wechatcampaign_match_crm_20200108 bb
+        ON aa.account_id = bb.account_id
+        AND aa.do_latest_utm_content = bb.do_latest_utm_content) j
+    on ddm.account_id = j.account_id
+    where j.account_id is not null
+    group by ddm.campaign,ddm.account_id
+    ) fj
+GROUP BY fj.campaign;
