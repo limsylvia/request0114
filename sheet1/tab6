@@ -1,0 +1,24 @@
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+-------------------------------------------------------------CREATE - crm sales-----------------------------------------------
+DROP TABLE IF EXISTS da_dev.MC_CRM_SalesbyGender_Request20200114;
+CREATE TABLE da_dev.MC_CRM_SalesbyGender_Request20200114
+(
+    trans_id bigint,
+    account_id bigint,
+trans_time string,
+campaign bigint,
+gender_group bigint
+);
+
+INSERT INTO da_dev.MC_CRM_SalesbyGender_Request20200114 (trans_id, account_id, 
+trans_time, campaign, gender_group)
+select a.trans_id, a.account_id, a.trans_time, a.campaign, b.gender
+From 
+da_dev.MC_CRM_SalesbyAge_Request20200114 a 
+Join crm.dim_account b
+On a.account_id = b.account_id;
+
+Select count(trans_id), gender_group, campaign
+From da_dev.MC_CRM_SalesbyGender_Request20200114
+Group by gender_group, campaign;
