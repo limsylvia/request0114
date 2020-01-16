@@ -1,0 +1,89 @@
+set hive.execution.engine = tez;
+set tez.queue.name = sephora_internal;
+
+--table2
+--create campaign lable table
+------------------------------------------------------------------------------
+
+drop table if exists `da_dev.wechatcampaign_label_member`;
+create table `da_dev.wechatcampaign_label_member`
+(
+`second_id` string,
+`ps201906` int,
+`ps201909` int,
+`ps201911` int,
+`campaigncnt` int,
+`member` int
+);
+insert into table `da_dev.wechatcampaign_label_member`
+select second_id, 
+ps201906,
+ps201909,
+ps201911,
+ps201906+ps201909+ps201911 as campaigncnt,
+member
+from(
+			select second_id,
+			sum(ps201906) as ps201906,
+			sum(ps201909) as ps201909,
+			sum(ps201911) as ps201911,
+			member
+			from(
+						select second_id,
+						case when do_latest_utm_content='ps201906' then 1 else 0 end as ps201906,
+						case when do_latest_utm_content='ps201909' then 1 else 0 end as ps201909,
+						case when do_latest_utm_content='ps201911' then 1 else 0 end as ps201911,
+						member
+						from(
+									select distinct
+                                    second_id,
+									account_id,
+									do_latest_utm_content,
+									case when account_id is not null then 1 else 0 end as member
+									from `da_dev.wechatcampaign_match_crm_20200108_temp` aa
+									left JOIN da_dev.iris_user_id_mapping bb
+									on aa.user_id = bb.sensor_id
+
+								)a
+						)b
+			group by second_id, member
+			)c;
+
+set hive.execution.engine = tez;
+set tez.queue.name = sephora_internal;
+select 'ps06' as campaign, count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=1
+and ps201906=1
+group by member
+union all
+select 'ps09' as campaign, count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=1
+and ps201909=1
+group by member
+union all
+select 'ps11' as campaign, count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=1
+and ps201911=1
+group by member
+union all
+select 'ps06&09' as campaign,count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=2
+and ps201906=1
+and ps201909=1
+group by member
+union all
+select 'ps09&11' as campaign, count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=2
+and ps201911=1
+and ps201909=1
+group by member
+union all
+select 'ps06&11' as campaign, count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=2
+and ps201906=1
+and ps201911=1
+group by member
+union all
+select 'all' as campaign, count(distinct second_id), member from da_dev.wechatcampaign_label_member
+where campaigncnt=3
+group by member
