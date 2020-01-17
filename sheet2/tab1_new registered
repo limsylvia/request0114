@@ -1,0 +1,15 @@
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+SELECT count(distinct a.account_id) as cnt1
+FROM crm.dim_account a
+join (
+    select account_id
+    from da_dev.wechatcampaign_match_crm_20200108_temp c
+    join da_dev.iris_user_id_mapping i
+    on c.user_id = i.sensor_id
+) j
+on a.account_id = j.account_id
+WHERE recruitment_date < '2019-10-30';'2019-09-04'; '2019-05-29';
+between '2019-10-30' and '2019-12-24';  '2019-09-04' and '2019-10-28';between '2019-05-29' and '2019-07-25';
