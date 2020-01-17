@@ -7,18 +7,31 @@ CREATE TABLE da_dev.MC_CRM_SalesbyGender_Request20200114
     trans_id bigint,
     account_id bigint,
 trans_time string,
-campaign bigint,
-gender_group bigint
+do_latest_utm_content string,
+`gender` bigint
 );
 
 INSERT INTO da_dev.MC_CRM_SalesbyGender_Request20200114 (trans_id, account_id, 
-trans_time, campaign, gender_group)
-select a.trans_id, a.account_id, a.trans_time, a.campaign, b.gender
-From 
-da_dev.MC_CRM_SalesbyAge_Request20200114 a 
-Join crm.dim_account b
-On a.account_id = b.account_id;
+trans_time, do_latest_utm_content, gender)
+SELECT trans_id, cdt.account_id, trans_time,
+CASE WHEN to_date(trans_time)  between  '2019-05-31' and '2019-06-05' THEN 'ps201906'
+when to_date(trans_time)  between '2019-09-04'  and  '2019-09-08' THEN 'ps201909'
+when to_date(trans_time)  between '2019-11-01'  and  '2019-11-04' THEN 'ps201911'
+end as do_latest_utm_content, 
+cda.gender
+FROM crm.dim_trans cdt
+join crm.dim_account cda
+on cdt.account_id = cda.account_id;
 
-Select count(trans_id), gender_group, campaign
-From da_dev.MC_CRM_SalesbyGender_Request20200114
-Group by gender_group, campaign;
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+select count(distinct trans_id), do_latest_utm_content, gender
+from da_dev.MC_CRM_SalesbyGender_Request20200114 g
+join (
+    select ddw.account_id,ddw.do_latest_utm_content
+    from da_dev.wechatcampaign_match_crm_20200108 ddw
+) j
+on g.account_id = j.account_id
+and g.do_latest_utm_content = j.do_latest_utm_content
+group by g.do_latest_utm_content, g.gender;
