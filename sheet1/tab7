@@ -1,6 +1,6 @@
 SET hive.execution.engine = tez;
 SET tez.queue.name = sephora_internal;
-
+select gender from crm.dim_account where gender != 0 and gender !=1;
 
 DROP TABLE IF EXISTS da_dev.MC_CRM_SalesbyAge_Request20200114;
 CREATE TABLE da_dev.MC_CRM_SalesbyAge_Request20200114
@@ -9,26 +9,25 @@ CREATE TABLE da_dev.MC_CRM_SalesbyAge_Request20200114
     account_id bigint,
     `age` int,
     `age_group` string,
-    trans_time string,
-    `campaign` bigint comment'1-1905,2-1909,3-1911'
+    do_latest_utm_content string
 );
-INSERT INTO da_dev.MC_CRM_SalesbyAge_Request20200114(trans_id, account_id, age, age_group, trans_time, campaign)
+INSERT INTO da_dev.MC_CRM_SalesbyAge_Request20200114(trans_id, account_id, age, age_group, do_latest_utm_content)
 SELECT trans_id, account_id, age, 
 CASE WHEN age between 18 and 25  THEN 'Age 18 - 25'
     WHEN age between 26 and 30 THEN 'Age 26 - 30'
     WHEN age between 31 and 35 THEN 'Age 31 - 35'
     WHEN age between 36 and 40 THEN 'Age 36 - 40'
     ELSE  'Age Others' END as age_group,
-trans_time,
-CASE WHEN to_date(aa.trans_time)  between  '2019-05-29' and '2019-06-02' THEN 1 
-    WHEN to_date(aa.trans_time)  between '2019-09-01' and '2019-09-08' THEN 2
-    WHEN to_date(aa.trans_time)  between '2019-10-28' and '2019-11-03' THEN 3
-    ELSE 0 END as campaign
-FROM crm.dim_trans aa;
+CASE WHEN to_date(trans_time)  between  '2019-05-31' and '2019-06-05' THEN 'ps201906'
+when to_date(trans_time)  between '2019-09-04'  and  '2019-09-08' THEN 'ps201909'
+when to_date(trans_time)  between '2019-11-01'  and  '2019-11-04' THEN 'ps201911'
+end as do_latest_utm_content
+FROM crm.dim_trans cdt
+where account_id is not null;
 
 
 
 --Table7--------------------------------------------------------------------------------------------------------------------
-Select count(trans_id) as cnt, age_group, campaign
+Select count(trans_id) as cnt, age_group
 From da_dev.MC_CRM_SalesbyAge_Request20200114
 Group by age_group, campaign;
