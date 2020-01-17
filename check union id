@@ -1,0 +1,21 @@
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+
+select count(distinct unionid) as cnt
+from oms.ods_wechat_register_info r
+join (
+    select b.openid
+from oms.ods_wechat_bind_mobile_list b
+join (
+    select distinct second_id
+from da_dev.wechatcampaign_match_crm_20200108_temp t 
+join da_dev.iris_user_id_mapping m
+on t.user_id = m.sensor_id
+where account_id is not null
+) aa
+on b.userid = aa.second_id
+)bb
+on r.openid = bb.openid
+where unionid is not null;
