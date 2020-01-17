@@ -1,19 +1,44 @@
 SET hive.execution.engine = tez;
 SET tez.queue.name = sephora_internal;
 
---table3 Newly Registered Avg Order Value (Campaign period)
-SELECT fj.campaign, avg(fj.orderv)
-FROM
+DROP TABLE IF EXISTS da_dev.MC_AccountRegistered_Request20200108;
+CREATE TABLE da_dev.MC_AccountRegistered_Request20200108
 (
-    SELECT ddm.campaign,ddm.account_id,cast(distinct ddm.total_sales as bigint) as orderv
-    FROM da_dev.MC_CRM_Order_Request20200108 ddm
-    join (SELECT aa.account_id,aa.do_latest_utm_content
-        FROM da_dev.MC_AccountRegistered_Request20200108 aa
-        JOIN da_dev.wechatcampaign_match_crm_20200108 bb
-        ON aa.account_id = bb.account_id
-        AND aa.do_latest_utm_content = bb.do_latest_utm_content) j
-    on ddm.account_id = j.account_id
-    where j.account_id is not null
-    group by ddm.campaign,ddm.account_id
-    ) fj
-GROUP BY fj.campaign;
+    account_id int,
+    registered_date string,
+	do_latest_utm_content string
+);
+
+--ps201906 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201906'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between  '2019-05-31' and '2019-06-05'; 
+--ps201909 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201909'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between '2019-09-04' and '2019-09-08';
+--ps201911 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201911'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between '2019-11-01' and '2019-11-04';
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+select avg(t.total_sales), j.do_latest_utm_content
+from (
+	select r.account_id, r.do_latest_utm_content
+from da_dev.wechatcampaign_match_crm_20200108 c
+join da_dev.MC_AccountRegistered_Request20200108 r
+on c.account_id = r.account_id
+and c.do_latest_utm_content = r.do_latest_utm_content
+) j
+join crm.dim_trans t
+on j.account_id = t.account_id
+group by do_latest_utm_content;
