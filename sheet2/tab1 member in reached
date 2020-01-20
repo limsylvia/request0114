@@ -1,0 +1,17 @@
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal; 
+
+select count(distinct aa.account_id) as cnt, count(distinct aa.mobile) as mcnt,card_type
+from(
+select account_id, prefer_store, card_type, mobile
+from crm.dim_account
+where cast(prefer_store as int) in (194,1040,1213,1115,69,1236,217)
+and mobile like '1%'
+) aa
+join
+(select t.account_id
+from crm.dim_trans t
+where to_date(t.trans_time)  between  '2019-01-20' and '2020-01-19'
+)tt
+on aa.account_id = tt.account_id
+group by card_type;
