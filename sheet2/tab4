@@ -1,0 +1,10 @@
+SET
+  hive.execution.engine = tez;
+SET
+  tez.queue.name = sephora_internal;
+select
+  count(r.account_id) as cnt,
+  r.do_latest_utm_content,
+from
+  da_dev.MC_AccountRegistered_Request20200108 r
+  join crm.dim_account cda on r.account_id = cda.account_id;
