@@ -122,3 +122,39 @@ join (
 ) j
 on a.account_id = j.account_id
 WHERE recruitment_date between '2019-10-30' and '2019-11-04'
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+SELECT count(distinct a.account_id) as cnt1, 'ad+3' as timeperiod, 6 as camp
+FROM crm.dim_account a
+join (
+    select account_id
+    from da_dev.wechatcampaign_match_crm_20200108_temp_reach c
+    join da_dev.iris_user_id_mapping i
+    on c.user_id = i.sensor_id
+) j
+on a.account_id = j.account_id
+WHERE recruitment_date between '2019-05-29' and '2019-06-08'
+union all
+SELECT count(distinct a.account_id) as cnt1, 'ad+3' as timeperiod, 9 as camp
+FROM crm.dim_account a
+join (
+    select account_id
+    from da_dev.wechatcampaign_match_crm_20200108_temp_reach c
+    join da_dev.iris_user_id_mapping i
+    on c.user_id = i.sensor_id
+) j
+on a.account_id = j.account_id
+WHERE recruitment_date between '2019-09-04' and '2019-09-11'
+union all
+SELECT count(distinct a.account_id) as cnt1, 'ad+3' as timeperiod, 11 as camp
+FROM crm.dim_account a
+join (
+    select account_id
+    from da_dev.wechatcampaign_match_crm_20200108_temp_reach c
+    join da_dev.iris_user_id_mapping i
+    on c.user_id = i.sensor_id
+) j
+on a.account_id = j.account_id
+WHERE recruitment_date between '2019-10-30' and '2019-11-07'
