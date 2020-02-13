@@ -1,0 +1,89 @@
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+-------------------------------create wechatcampaign_label-----------------------------------
+drop table if exists `da_dev.wechatcampaign_label_member`;
+create table `da_dev.wechatcampaign_label_member`
+(
+`second_id` string,
+`ps201906` int,
+`ps201909` int,
+`ps201911` int,
+`campaigncnt` int,
+`member` int
+);
+insert into table `da_dev.wechatcampaign_label_member`
+select second_id, 
+ps201906,
+ps201909,
+ps201911,
+ps201906+ps201909+ps201911 as campaigncnt,
+member
+from(
+            select second_id,
+            sum(ps201906) as ps201906,
+            sum(ps201909) as ps201909,
+            sum(ps201911) as ps201911,
+            member
+            from(
+                        select second_id,
+                        case when do_latest_utm_content='ps201906' then 1 else 0 end as ps201906,
+                        case when do_latest_utm_content='ps201909' then 1 else 0 end as ps201909,
+                        case when do_latest_utm_content='ps201911' then 1 else 0 end as ps201911,
+                        member
+                        from(
+                            select distinct second_id,member,do_latest_utm_content
+                            from(
+                                    select 
+aa.second_id,
+                                    account_id,
+                                    do_latest_utm_content,
+                                    case when account_id is not null then 1 else 0 end as member
+                                    from (
+                                    select distinct user_id,second_id,do_latest_utm_content     
+                                    from `da_dev.wechatcampaign_match_crm_20200108_temp_reach` a
+                                    left join dwd.users b
+                                    on a.user_id=b.id
+                                    ) aa
+                                    left JOIN da_dev.iris_user_id_mapping bb
+                                    on aa.user_id = bb.sensor_id
+                                    )t1
+
+                                )a
+                        )b
+            group by second_id, member
+            )c;
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+-----------------------------------------------------计算人数------------------------------------------------------------
+select count(distinct cc.second_id) as cnt, do_latest_utm_content,camp
+from
+(
+    select bb.second_id, do_latest_utm_content, 
+    case when ps201906=1 and campaigncnt=1 then 'ps06'
+when ps201909=1 and campaigncnt=1 then 'ps09'
+when ps201911=1 and campaigncnt=1 then 'ps11'
+when ps201906=1 and ps201909=1 and campaigncnt=2 then 'ps06&09'
+when ps201906=1 and ps201911=1 and campaigncnt=2 then 'ps06&11'
+when ps201909=1 and ps201911=1 and campaigncnt=2 then 'ps09&11'
+when campaigncnt=3 then 'quan' end as camp
+from 
+    (
+    select aa.second_id, aa.do_latest_utm_content,
+    ps201906,
+    ps201909,
+    ps201911,
+    campaigncnt
+    from da_dev.wechatcampaign_label_member c
+    join 
+    (
+        select m.second_id, r.do_latest_utm_content
+        from da_dev.iris_user_id_mapping m
+        join da_dev.MC_AccountRegistered_Request20200108 r
+        on m.account_id=r.account_id
+        where do_latest_utm_content is not null
+    ) aa
+    on c.second_id=aa.second_id
+    )bb
+) cc
+group by do_latest_utm_content, camp
