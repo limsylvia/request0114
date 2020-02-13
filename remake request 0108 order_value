@@ -1,6 +1,94 @@
 SET hive.execution.engine = tez;
 SET tez.queue.name = sephora_internal;
+-------------------create reached temp&campaign------------------------
+DROP TABLE IF exists `da_dev.wechatcampaign_match_crm_20200108_temp_reach`;
 
+CREATE TABLE `da_dev.wechatcampaign_match_crm_20200108_temp_reach`
+(
+`event` string,
+`user_id` string,
+`distinct_id` string,
+`do_latest_utm_campaign` string,
+`do_latest_utm_source` string,
+`do_latest_utm_medium` string,
+`do_latest_utm_content` string,
+`if_success` string ,
+`date` string
+);
+
+
+INSERT INTO TABLE `da_dev.wechatcampaign_match_crm_20200108_temp_reach`
+-----raw data
+SELECT event,
+user_id,
+distinct_id,
+do_latest_utm_campaign,
+do_latest_utm_source,
+do_latest_utm_medium,
+do_latest_utm_content,
+if_success,
+`date`
+FROM dwd.v_events t1
+WHERE do_latest_utm_campaign='momentads'
+and do_latest_utm_source='wechat'
+and 
+(
+	(
+		do_latest_utm_content ='ps201906'
+		and do_latest_utm_term ='20190529'
+		and do_latest_utm_medium ='social'
+		and `dt` between '2019-05-29'  and  '2019-06-02'
+	)
+	or 
+	(
+		do_latest_utm_content ='ps201909'
+		and do_latest_utm_medium ='social'
+		and `dt` between '2019-09-04'  and  '2019-09-08'
+	)
+	or 
+	(
+		do_latest_utm_content ='ps201911'
+		and do_latest_utm_medium ='social'
+		and `dt` between '2019-10-30'  and  '2019-11-03'
+	)																
+)
+
+
+
+DROP TABLE IF exists `da_dev.wechatcampaign_match_crm_20200108_reach`;
+
+CREATE TABLE `da_dev.wechatcampaign_match_crm_20200108_reach`
+(
+
+`account_id` int,
+`card_no` string,
+`do_latest_utm_campaign` string,
+`do_latest_utm_source` string,
+`do_latest_utm_medium` string,
+`do_latest_utm_content` string,
+`if_success` string ,
+`date` string
+);
+
+INSERT INTO TABLE `da_dev.wechatcampaign_match_crm_20200108_reach`
+-----raw data
+SELECT 
+account_id,
+card_number as card_no,
+do_latest_utm_campaign,
+do_latest_utm_source,
+do_latest_utm_medium,
+do_latest_utm_content,
+if_success,
+`date`
+from `da_dev.wechatcampaign_match_crm_20200108_temp_reach` aa
+left JOIN da_dev.iris_user_id_mapping bb
+on aa.user_id = bb.sensor_id
+WHERE bb.account_id is not null
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+----------------------------create register-----------------------------
 DROP TABLE IF EXISTS da_dev.MC_AccountRegistered_Request20200108;
 CREATE TABLE da_dev.MC_AccountRegistered_Request20200108
 (
@@ -34,7 +122,7 @@ SET tez.queue.name = sephora_internal;
 select avg(t.total_sales), j.do_latest_utm_content
 from (
 	select r.account_id, r.do_latest_utm_content
-from da_dev.wechatcampaign_match_crm_20200108 c
+from da_dev.wechatcampaign_match_crm_20200108_reach c
 join da_dev.MC_AccountRegistered_Request20200108 r
 on c.account_id = r.account_id
 and c.do_latest_utm_content = r.do_latest_utm_content
