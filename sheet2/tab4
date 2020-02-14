@@ -1,10 +1,46 @@
-SET
-  hive.execution.engine = tez;
-SET
-  tez.queue.name = sephora_internal;
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
+-------------------------------------------------------------CREATE account - Registered data table-----------------------------------------------
+
+DROP TABLE IF EXISTS da_dev.MC_AccountRegistered_Request20200108;
+CREATE TABLE da_dev.MC_AccountRegistered_Request20200108
+(
+    account_id int,
+    registered_date string,
+	do_latest_utm_content string
+);
+
+--ps201906 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201906'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between  '2019-05-29' and '2019-06-05'; 
+--ps201909 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201909'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between '2019-09-04' and '2019-09-08';
+--ps201911 Registered
+INSERT INTO da_dev.MC_AccountRegistered_Request20200108(account_id,registered_date,do_latest_utm_content)
+SELECT account_id,recruitment_date,'ps201911'
+FROM crm.dim_account
+WHERE 1 = 1
+AND recruitment_date between '2019-10-30' and '2019-11-04';
+
+SET hive.execution.engine = tez;
+SET tez.queue.name = sephora_internal;
+
 select
   count(r.account_id) as cnt,
   r.do_latest_utm_content,
+  gender
 from
   da_dev.MC_AccountRegistered_Request20200108 r
-  join crm.dim_account cda on r.account_id = cda.account_id;
+  join crm.dim_account cda 
+  on r.account_id = cda.account_id
+where r.do_latest_utm_content is not null
+group by r.do_latest_utm_content, gender
+;
