@@ -37,7 +37,7 @@ aa.second_id,
                                     case when account_id is not null then 1 else 0 end as member
                                     from (
                                     select distinct user_id,second_id,do_latest_utm_content     
-                                    from `da_dev.wechatcampaign_match_crm_20200108_temp` a
+                                    from `da_dev.wechatcampaign_match_crm_20200108_temp_reach` a
                                     left join dwd.users b
                                     on a.user_id=b.id
                                     ) aa
